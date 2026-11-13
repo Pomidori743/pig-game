@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Свинячья эволюция</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: system-ui, sans-serif; background: #2b1d2e; color: #fff;
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 16px; user-select: none;
+  }
+  h1 { font-size: 22px; margin: 8px 0 12px; }
+  #top { width: 100%; max-width: 380px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  #coins { font-size: 22px; font-weight: bold; color: #ffd54a; }
+  #msg { min-height: 22px; width: 100%; max-width: 380px; text-align: center; margin: 8px 0; color: #cfe9ff; font-size: 15px; }
+  #board {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    width: 100%; max-width: 380px; background: #4a3350; padding: 8px; border-radius: 16px;
+  }
+  .cell {
+    aspect-ratio: 1; background: #3a2a40; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 40px; position: relative; cursor: pointer; transition: transform .1s;
+  }
+  .cell:active { transform: scale(.94); }
+  .cell.sel { outline: 3px solid #7fdc6a; outline-offset: -3px; }
+  .cell.has { background: var(--bg); }
+  .lvl {
+    position: absolute; bottom: 4px; left: 0; right: 0; text-align: center;
+    font-size: 11px; color: #222; font-weight: bold;
+  }
+  .btns { display: flex; gap: 12px; margin-top: 16px; width: 100%; max-width: 380px; }
+  button {
+    flex: 1; padding: 14px; font-size: 17px; border: none; border-radius: 12px;
+    background: #ff8fb1; color: #2b1d2e; font-weight: bold; cursor: pointer;
+  }
+  button.alt { background: #6b5b73; color: #fff; }
+  button:disabled { opacity: .4; }
+  #legend { margin-top: 18px; font-size: 13px; color: #bfb0c8; width: 100%; max-width: 380px; line-height: 1.6; }
+  #over {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7);
+    align-items: center; justify-content: center; flex-direction: column; font-size: 20px; text-align: center; padding: 20px;
+  }
+  #over.show { display: flex; }
+  #over button { flex: none; margin-top: 16px; width: 200px; }
+</style>
+</head>
+<body>
+
+<h1>🐷 Свинячья эволюция</h1>
+
+<div id="top">
+  <div id="coins">Монеты: 0</div>
+</div>
+
+<div id="board"></div>
+<div id="msg"></div>
+
+<div class="btns">
+  <button id="buyBtn" onclick="buy()">Купить свинку (10)</button>
+  <button class="alt" onclick="init()">Заново</button>
+</div>
+
+<div id="legend">
+  Нажми на свинку, потом на такую же рядом, чтобы слить их.<br>
+  1 серая → 2 розовая → 3 длинноносая → 4 на колёсах → 5 гигант → 6 мускулистая
+</div>
+
+<div id="over">
+  <div id="overText"></div>
+  <button onclick="init()">Играть снова</button>
+</div>
+
+<script>
+const SIZE = 4, MAX = 6, COST = 10, START = 30, REWARD = 8;
+const COLORS = ['', '#c9b8a6', '#f5a3b5', '#ff7b7b', '#9ad0ff', '#b58cff', '#ffd54a'];
+const EMOJI  = ['', '🐷', '🐷', '🐖', '🐖', '🐗', '💪'];
+const NAMES  = ['', 'Серая', 'Розовая', 'Длинноносая', 'На колёсах', 'Гигант', 'Мускулистая'];
+
+let board, coins, sel, msg, over;
+
+function init() {
+  board = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+  coins = START; sel = null; msg = ''; over = false;
+  addPig(); addPig();
+  document.getElementById('over').classList.remove('show');
+  render();
+}
+
+function empties() {
+  const e = [];
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++)
+      if (!board[r][c]) e.push([r, c]);
+  return e;
+}
+
+function addPig() {
+  const e = empties();
+  if (!e.length) return false;
+  const [r, c] = e[Math.floor(Math.random() * e.length)];
+  board[r][c] = 1;
+  return true;
+}
+
+function canMerge() {
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++) {
+      const v = board[r][c];
+      if (!v || v === MAX) continue;
+      if (c + 1 < SIZE && board[r][c + 1] === v) return true;
+      if (r + 1 < SIZE && board[r + 1][c] === v) return true;
+    }
+  return false;
+}
+
+function isAdjacent(a, b) {
+  return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) === 1;
+}
+
+function buy() {
+  if (over) return;
+  if (coins < COST) msg = 'Не хватает монет';
+  else if (!addPig()) msg = 'Нет свободного места';
+  else { coins -= COST; msg = 'Куплена новая свинка'; }
+  sel = null;
+  render();
+}
+
+function tap(r, c) {
+  if (over) return;
+  const v = board[r][c];
+
+  if (sel) {
+    const [sr, sc] = sel;
+    if (sr === r && sc === c) {
+      sel = null;
+      msg = '';
+    } else if (v && board[sr][sc] === v && v < MAX && isAdjacent(sel, [r, c])) {
+      const nl = v + 1;
+      board[r][c] = nl;
+      board[sr][sc] = 0;
+      const reward = nl * REWARD;
+      coins += reward;
+      msg = nl === MAX
+        ? `ВАУ! Мускулистая свинка! +${reward} монет`
+        : `Слияние! Уровень ${nl} (+${reward} монет)`;
+      sel = null;
+    } else {
+      sel = v ? [r, c] : null;
+      msg = '';
+    }
+  } else if (v) {
+    sel = [r, c];
+    msg = '';
+  }
+  render();
+}
+
+function render() {
+  const boardEl = document.getElementById('board');
+  boardEl.innerHTML = '';
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++) {
+      const v = board[r][c];
+      const div = document.createElement('div');
+      div.className = 'cell';
+      if (v) {
+        div.classList.add('has');
+        div.style.setProperty('--bg', COLORS[v]);
+        div.textContent = EMOJI[v];
+        const lbl = document.createElement('span');
+        lbl.className = 'lvl';
+        lbl.textContent = NAMES[v];
+        div.appendChild(lbl);
+      }
+      if (sel && sel[0] === r && sel[1] === c) div.classList.add('sel');
+      div.onclick = () => tap(r, c);
+      boardEl.appendChild(div);
+    }
+
+  document.getElementById('coins').textContent = 'Монеты: ' + coins;
+  document.getElementById('msg').textContent = msg;
+  document.getElementById('buyBtn').disabled = coins < COST;
+
+  if (!canMerge() && (empties().length === 0 || coins < COST)) {
+    over = true;
+    document.getElementById('overText').textContent =
+      'Игра окончена! Монет и места не осталось, слиться нельзя.';
+    document.getElementById('over').classList.add('show');
+  }
+}
+
+init();
+</script>
+</body>
+</html>
